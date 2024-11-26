@@ -1,0 +1,197 @@
+#!/bin/bash
+# bn program (The Bash Assignment)
+# Author: Mahad Hassan, October 20th, 2024
+# The following program ranks the popularity of a given name in a given year based on US data.
+
+# Function to rank the popularity of a given name in a given year based on the input
+rank() { 
+    local year="$1"
+    local gender="$2"
+    local name="$3"
+    local file="us_baby_names/yob$year.txt" # File path to the year's data
+    local total_f=0 # Total number for female names
+    local rank_f=0 # Rank for female name
+    local total_m=0 # Total number for male names
+    local rank_m=0 # Rank for male name 
+    
+    # Find the total and rank numbers for male and female names using ggrep
+    total_f=$(cat $file | ggrep -iP "^.+,F,.+$" | wc -l | ggrep -oP "[0-9]+")
+    rank_f=$(cat $file | ggrep -iP "^.+,F,.+$" | ggrep -inP "\b$name\b,F,.+$" | ggrep -oP "^[0-9]+") 
+
+    total_m=$(cat $file | ggrep -iP "^.+,M,.+$" | wc -l | ggrep -oP "[0-9]+")
+    rank_m=$(cat $file | ggrep -iP "^.+,M,.+$" | ggrep -inP "\b$name\b,M,.+$" | ggrep -oP "^[0-9]+")
+
+    # Many if statements to output the rank based on the gender
+    if [[ $gender =~ ^[mM]$ ]]; 
+    then
+        if [[ -z $rank_m ]]; 
+        then
+            echo "${year}: $name not found among male names."
+        else
+            echo "${year}: $name ranked $rank_m out of $total_m male names."
+        fi
+    elif [[ $gender =~ ^[fF]$ ]];
+    then
+        if [[ -z $rank_f ]];
+        then
+            echo "${year}: $name not found among female names."
+        else
+            echo "${year}: $name ranked $rank_f out of $total_f female names."
+        fi
+    elif [[ $gender =~ ^[bB]$ ]];
+    then
+        if [[ -z $rank_m ]];
+        then
+            echo "${year}: $name not found among male names."
+        else
+            echo "${year}: $name ranked $rank_m out of $total_m male names."
+        fi
+        if [[ -z $rank_f ]];
+        then
+            echo "${year}: $name not found among female names."
+        else
+            echo "${year}: $name ranked $rank_f out of $total_f female names."
+        fi
+    fi
+}
+# Function to check if the input is valid
+valid_input() {
+    local year="$1"
+    local gender="$2"
+    local name="$3"
+
+    # if statements to check each error case and return the appropriate exit code
+    if [[ $year =~ ^[0-9]{4}$ && $gender =~ ^[fFmMbB]$ ]]; # if both year and gender are valid
+    then
+        if [[ ! -f us_baby_names/yob$year.txt ]]; # if the files does not exist return 4
+        then
+            return 4
+        elif [[ $name =~ ^[a-zA-Z]+$ ]]; # if the name is valid return 0
+        then
+            if [[ -f us_baby_names/yob$year.txt ]]; # if the file exists return 0
+            then
+                return 0
+            else
+                return 4 # if the file does not exist return 4
+            fi
+        else
+            return 3 # if the name is not valid return 3
+        fi
+    else
+        return 2 # if the year or gender are not valid return 2
+    fi 
+}
+
+# Function to display the help message
+help () {
+    cat << EOF
+    bn: v1.0.0
+
+    bn is a program that ranks the popularity of a given name based on the inputted gender and year.
+
+    Usage: 
+        bn <year> <assigned gender: f|F|m|M|b|B>
+        <names>
+
+    Example: 
+        bn 2022 m
+        Sam
+
+    Example output:
+        2022: Sam ranked 658 out of 14255 male names.
+
+    Arguments:
+        - year: The year to search for the name in. Must be a 4 digit number.
+        - gender: Either f/F for female, m/M for male, or b/B for both.
+        - names: The names to search for in the given year.
+    
+    Exit Codes:
+        Exit 0 - Success
+        Exit 1 - Invalid number of arguments
+        Exit 2 - Invalid gender or year
+        Exit 3 - Invalid name format
+        Exit 4 - No data for the given year
+EOF
+}
+
+# Function to display the usage message
+usage() {
+    echo "Usage: bn <year> <assigned gender: f|F|m|M|b|B>"
+}
+
+# Main function to run the entire program
+main() {
+    local year="$1"
+    local gender="$2"
+    local name
+    local valid
+
+    # if the number of arguments is not 2, check for the help message otherwise exit 1 and display the usage message
+    if [[ $# -ne 2 ]];
+    then
+        if [[ $1 =~ ^--help$ ]];
+        then
+            help
+            exit 0
+        else
+            usage
+            exit 1
+        fi
+    fi
+
+    # check if the year and gender are valid
+    valid_input "$year" "$gender"
+    valid=$?
+
+    # since no name was inputted, the program should return 3 which means these if statements will check for the other error cases
+    if [[ $valid -eq 2 ]];
+    then
+        if ! [[ $year =~ ^[0-9]{4}$ ]];
+        then
+            echo -e "Badly formatted year: $year\nbn <year> <assigned gender: f|F|m|M|b|B>" >&2
+            exit 2
+        elif ! [[ $gender =~ ^[fFmMbB]$ ]];
+        then
+            echo -e "Badly formatted assigned gender: $gender\nbn <year> <assigned gender: f|F|m|M|b|B>" >&2
+            exit 2
+        fi
+    elif [[ $valid -eq 4 ]];
+    then
+        echo "No data for $year" >&2
+        exit 4
+    else
+        while read line; # while loop to read the inputted names
+        do
+            for word in $line; # for loop to read each name
+            do
+                name="$word"
+
+                valid_input "$year" "$gender" "$name"
+                valid=$? # check for the return value of the valid_input function
+
+                if [[ $valid -eq 0 ]]; # if the input is valid, rank the name
+                then
+                    rank "$year" "$gender" "$name"
+
+                elif [[ $valid -eq 1 ]]; # if the number of arguments is invalid, display the usage message and exit 1
+                then
+                    usage >&2 
+                    exit 1
+                
+                # exit 2 is already checked above
+
+                elif [[ $valid -eq 3 ]]; # if the name is invalid, display the error message and exit 3
+                then
+                    echo "Badly formatted name: $name" >&2
+                    exit 3
+
+                elif [[ $valid -eq 4 ]]; # if the year file doesn't exist, display the error message and exit 4
+                then
+                    echo "No data for $year" >&2
+                    exit 4
+                fi
+            done
+        done
+    fi
+}
+main "$@"
